@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'app.maritime'
+version = '0.7.0'
+
+description = 'Maritime Intelligence v0.7 - AIS diagnostics and live vessel tracking'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+application {
+    mainClass = 'app.maritime.MaritimeIntelligenceApplication'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
