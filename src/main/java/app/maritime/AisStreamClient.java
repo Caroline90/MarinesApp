@@ -10,6 +10,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@org.springframework.stereotype.Component
 final class AisStreamClient {
     private static final Pattern MESSAGE_TYPE = Pattern.compile("\\\"MessageType\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern MMSI = Pattern.compile("\\\"MMSI\\\"\\s*:\\s*(?:\\\"([^\\\"]+)\\\"|(\\d+))");
@@ -19,22 +20,22 @@ final class AisStreamClient {
     private static final Pattern SOG = Pattern.compile("\\\"Sog\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
     private static final Pattern COG = Pattern.compile("\\\"Cog\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
 
-    private final AppConfig config;
+    private final AisStreamProperties properties;
     private final AisDiagnosticsService diagnostics;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
-    AisStreamClient(AppConfig config, AisDiagnosticsService diagnostics) {
-        this.config = config;
+    AisStreamClient(AisStreamProperties properties, AisDiagnosticsService diagnostics) {
+        this.properties = properties;
         this.diagnostics = diagnostics;
     }
 
     void start() {
-        if (!config.aisEnabled()) {
+        if (!properties.enabled()) {
             diagnostics.connectionState("DISABLED");
             diagnostics.subscriptionState("DISABLED");
             return;
         }
-        if (config.aisApiKey().isBlank()) {
+        if (properties.apiKey().isBlank()) {
             diagnostics.connectionState("WAITING_FOR_API_KEY");
             diagnostics.subscriptionState("NOT_SUBSCRIBED");
             diagnostics.error("Set AISSTREAM_API_KEY or aisstream.api-key to connect.");
@@ -44,7 +45,7 @@ final class AisStreamClient {
         diagnostics.connectionState("CONNECTING");
         httpClient.newWebSocketBuilder()
                 .connectTimeout(Duration.ofSeconds(20))
-                .buildAsync(URI.create(config.aisUrl()), new Listener())
+                .buildAsync(URI.create(properties.url()), new Listener())
                 .exceptionally(error -> {
                     diagnostics.connectionState("ERROR");
                     diagnostics.subscriptionState("NOT_SUBSCRIBED");
@@ -89,7 +90,7 @@ final class AisStreamClient {
 
     private String subscriptionJson() {
         return "{\"APIKey\":\"%s\",\"BoundingBoxes\":[[[%s,%s],[%s,%s]]],\"FilterMessageTypes\":[\"PositionReport\"]}"
-                .formatted(config.aisApiKey(), config.minLatitude(), config.minLongitude(), config.maxLatitude(), config.maxLongitude());
+                .formatted(properties.apiKey(), properties.minLatitude(), properties.minLongitude(), properties.maxLatitude(), properties.maxLongitude());
     }
 
     private void handleMessage(String json) {

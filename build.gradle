@@ -1,6 +1,7 @@
 plugins {
     id 'java'
-    id 'application'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'app.maritime'
@@ -14,8 +15,10 @@ java {
     }
 }
 
-application {
-    mainClass = 'app.maritime.MaritimeIntelligenceApplication'
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 tasks.named('test') {
