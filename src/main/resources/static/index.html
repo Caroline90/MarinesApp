@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Maritime Intelligence v0.7</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><span>M</span><div><strong>MARITIME</strong><small>INTELLIGENCE</small></div></div>
+  <section class="status"><i></i><b id="connectionState">LOADING</b><em id="subscriptionState">...</em></section>
+  <input id="search" placeholder="Search vessel / MMSI">
+  <h3>Fleet Overview</h3>
+  <div class="cards"><article><small>VISIBLE</small><b id="visibleCount">0</b></article><article><small>REDIS VESSEL COUNT</small><b id="redisCount">0</b></article></div>
+  <h3>AIS Diagnostics</h3>
+  <dl class="diagnostics">
+    <dt>AIS messages</dt><dd id="aisMessageCounter">0</dd>
+    <dt>PositionReports</dt><dd id="positionReportCounter">0</dd>
+    <dt>Last type</dt><dd id="lastAisMessageType">none</dd>
+    <dt>Last error</dt><dd id="lastAisError">none</dd>
+    <dt>Endpoint</dt><dd>/api/v1/system/ais</dd>
+  </dl>
+  <h3>Selected Vessel</h3>
+  <section class="selected" id="selectedVessel">No vessel selected<br><small>Click a vessel on the map to inspect its current AIS state.</small></section>
+</aside>
+<main>
+  <header><h1>GLOBAL AIS TRACKING</h1><p>REAL-TIME VESSEL POSITIONS</p></header>
+  <div id="map"></div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
