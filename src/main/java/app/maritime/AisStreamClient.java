@@ -1,32 +1,30 @@
 package app.maritime;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @org.springframework.stereotype.Component
 final class AisStreamClient {
-    private static final Pattern MESSAGE_TYPE = Pattern.compile("\\\"MessageType\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
-    private static final Pattern MMSI = Pattern.compile("\\\"MMSI\\\"\\s*:\\s*(?:\\\"([^\\\"]+)\\\"|(\\d+))");
-    private static final Pattern SHIP_NAME = Pattern.compile("\\\"ShipName\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
-    private static final Pattern LAT = Pattern.compile("\\\"Latitude\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
-    private static final Pattern LON = Pattern.compile("\\\"Longitude\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
-    private static final Pattern SOG = Pattern.compile("\\\"Sog\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
-    private static final Pattern COG = Pattern.compile("\\\"Cog\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
+    private static final Duration NO_DATA_FALLBACK_DELAY = Duration.ofSeconds(20);
 
     private final AisStreamProperties properties;
     private final AisDiagnosticsService diagnostics;
+    private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
-    AisStreamClient(AisStreamProperties properties, AisDiagnosticsService diagnostics) {
+    AisStreamClient(AisStreamProperties properties, AisDiagnosticsService diagnostics, ObjectMapper objectMapper) {
         this.properties = properties;
         this.diagnostics = diagnostics;
+        this.objectMapper = objectMapper;
     }
 
     void start() {
@@ -52,6 +50,7 @@ final class AisStreamClient {
                     diagnostics.error("AISStream connection failed: " + error.getMessage());
                     return null;
                 });
+        scheduleNoDataFallback();
     }
 
     private final class Listener implements WebSocket.Listener {
@@ -95,22 +94,42 @@ final class AisStreamClient {
 
     private void handleMessage(String json) {
         try {
-            String type = find(MESSAGE_TYPE, json).orElse("unknown");
+            JsonNode root = objectMapper.readTree(json);
+            String type = text(root, "MessageType").orElse("unknown");
             diagnostics.recordMessage(type);
-            if (!json.contains("\"PositionReport\"")) return;
-            String mmsi = find(MMSI, json).orElse("unknown");
-            String name = find(SHIP_NAME, json).map(String::trim).filter(s -> !s.isBlank()).orElse("MMSI " + mmsi);
-            diagnostics.recordPosition(new VesselPosition(mmsi, name, number(LAT, json), number(LON, json), number(SOG, json), number(COG, json), type, Instant.now()));
+            JsonNode positionReport = root.path("Message").path("PositionReport");
+            if (positionReport.isMissingNode()) return;
+            String mmsi = text(root.path("MetaData"), "MMSI")
+                    .or(() -> text(positionReport, "UserID"))
+                    .orElse("unknown");
+            String name = text(root.path("MetaData"), "ShipName")
+                    .map(String::trim)
+                    .filter(s -> !s.isBlank())
+                    .orElse("MMSI " + mmsi);
+            diagnostics.recordPosition(new VesselPosition(mmsi, name,
+                    number(positionReport, "Latitude"), number(positionReport, "Longitude"),
+                    number(positionReport, "Sog"), number(positionReport, "Cog"), type, Instant.now()));
         } catch (Exception error) {
             diagnostics.error("AISStream message parse error: " + error.getMessage());
         }
     }
 
-    private static Optional<String> find(Pattern pattern, String json) {
-        Matcher matcher = pattern.matcher(json);
-        if (!matcher.find()) return Optional.empty();
-        return Optional.ofNullable(matcher.group(1) == null ? matcher.group(2) : matcher.group(1));
+    private void scheduleNoDataFallback() {
+        if (!properties.demoFallbackEnabled()) return;
+        CompletableFuture.delayedExecutor(NO_DATA_FALLBACK_DELAY.toSeconds(), java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
+            if (diagnostics.positionReportCount() > 0) return;
+            diagnostics.error("No live AIS position reports received yet; showing labeled demo vessel until the stream delivers data.");
+            seedDemoVessel();
+        });
     }
-    private static double number(Pattern pattern, String json) { return find(pattern, json).map(Double::parseDouble).orElse(0.0); }
+
+    private static Optional<String> text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        if (value.isMissingNode() || value.isNull()) return Optional.empty();
+        return Optional.of(value.asText());
+    }
+
+    private static double number(JsonNode node, String field) { return node.path(field).asDouble(0.0); }
+
     private void seedDemoVessel() { diagnostics.recordPosition(new VesselPosition("261000001", "Świnoujście Demo", 53.912, 14.254, 0, 0, "DemoPositionReport", Instant.now())); }
 }

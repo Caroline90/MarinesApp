@@ -35,6 +35,7 @@ final class AisDiagnosticsService {
     void subscriptionState(String state) { subscriptionState = state; }
     void error(String message) { lastAisError = message == null || message.isBlank() ? "unknown AIS error" : message; }
     void recordMessage(String type) { aisMessageCounter.incrementAndGet(); lastAisMessageType = blank(type, "unknown"); }
+    long positionReportCount() { return positionReportCounter.get(); }
 
     void recordPosition(VesselPosition position) {
         positionReportCounter.incrementAndGet();
