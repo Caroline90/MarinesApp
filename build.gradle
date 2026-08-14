@@ -11,8 +11,12 @@ description = 'Maritime Intelligence v0.7 - AIS diagnostics and live vessel trac
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(17)
     }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
 }
 
 dependencies {
